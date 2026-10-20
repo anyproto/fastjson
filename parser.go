@@ -278,8 +278,37 @@ func escapeString(dst []byte, s string) []byte {
 		return dst
 	}
 
-	// Slow path.
-	return strconv.AppendQuote(dst, s)
+	// JSON permits only its own escapes, not Go's \x, \a, \v or \U forms.
+	// Preserve UTF-8 bytes and escape only quotes, backslashes and C0 controls.
+	const hex = "0123456789abcdef"
+	dst = append(dst, '"')
+	start := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 0x20 && c != '"' && c != '\\' {
+			continue
+		}
+		dst = append(dst, s[start:i]...)
+		switch c {
+		case '"', '\\':
+			dst = append(dst, '\\', c)
+		case '\b':
+			dst = append(dst, '\\', 'b')
+		case '\f':
+			dst = append(dst, '\\', 'f')
+		case '\n':
+			dst = append(dst, '\\', 'n')
+		case '\r':
+			dst = append(dst, '\\', 'r')
+		case '\t':
+			dst = append(dst, '\\', 't')
+		default:
+			dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&15])
+		}
+		start = i + 1
+	}
+	dst = append(dst, s[start:]...)
+	return append(dst, '"')
 }
 
 func hasSpecialChars(s string) bool {
